@@ -982,35 +982,57 @@ def api_chat_clear(item_id: int, resident_id: str):
     change_bus.publish({"type":"chat_cleared","entry": item_id, "rid": resident_id, "by": request.remote_addr, "ts": dt.datetime.utcnow().isoformat()})
     return jsonify({"ok": True})
 
-# ---------- Minimal UI (compact, có Global Chat + SSE toast + Profile unification) ----------
+# ---------- UI dashboard (collab-friendly, unified profile/persona, chat tools) ----------
 INDEX_HTML = r"""
 <!DOCTYPE html><html lang="vi"><head>
 <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>World Admin v2 — Đại Việt (Trần, TK XIII)</title>
 <style>
-:root{--bg:#0b0d10;--card:#101418;--text:#e7ebf0;--muted:#a9b4c0;--accent:#4f8cff;--danger:#e74c3c;}
-*{box-sizing:border-box}body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--text)}
-header{padding:12px 16px;border-bottom:1px solid #1e242c;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+:root{--bg:#0b0d10;--card:#101418;--text:#e7ebf0;--muted:#a9b4c0;--accent:#4f8cff;--danger:#e74c3c;--outline:#1e242c;}
+*{box-sizing:border-box}
+body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--text)}
+header{padding:12px 16px;border-bottom:1px solid var(--outline);display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 h1{font-size:16px;margin:0}
 .container{display:grid;grid-template-columns:340px 1fr;min-height:calc(100vh - 54px)}
-aside{border-right:1px solid #1e242c;padding:10px;gap:10px;display:flex;flex-direction:column}
-.card{background:var(--card);border:1px solid #1e242c;border-radius:12px;padding:10px}
+aside{border-right:1px solid var(--outline);padding:10px;gap:10px;display:flex;flex-direction:column}
+main{padding:10px;display:grid;grid-template-columns:1fr 420px;gap:12px;align-content:start}
+.card{background:var(--card);border:1px solid var(--outline);border-radius:12px;padding:12px}
+.entry-card{grid-column:1/3}
 .row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
-label{width:110px;font-size:12px;color:var(--muted)}
-input,select,textarea{width:100%;background:#0c1014;color:var(--text);border:1px solid #1e242c;border-radius:8px;padding:8px}
-button{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 10px;cursor:pointer}
-button.ghost{background:#0c1014;border:1px solid #1e242c}
+.between{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+label{width:120px;font-size:12px;color:var(--muted)}
+input,select,textarea{width:100%;background:#0c1014;color:var(--text);border:1px solid var(--outline);border-radius:8px;padding:8px}
+textarea{min-height:96px;resize:vertical}
+button{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 10px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-weight:600}
+button.ghost{background:#0c1014;border:1px solid var(--outline);color:var(--text)}
 button.danger{background:var(--danger)}
+button.slim{padding:6px 8px;font-size:12px}
 .small{font-size:12px;color:var(--muted)}
 .list{max-height:45vh;overflow:auto;display:flex;flex-direction:column;gap:6px}
-.item{background:#0c1014;border:1px solid #1e242c;border-radius:8px;padding:8px;cursor:pointer}
-.item:hover{border-color:#273446}
+.item{background:#0c1014;border:1px solid var(--outline);border-radius:8px;padding:8px;cursor:pointer;transition:all .15s ease}
+.item:hover{border-color:#273446;background:#101a24}
+.item.active{border-color:var(--accent);background:#142033}
 .pill{font-size:11px;padding:2px 6px;border-radius:999px;border:1px solid #243143;color:#a9c1ff}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.toast{position:fixed;right:16px;bottom:16px;background:#111b27;color:#e7ebf0;border:1px solid #213044;border-radius:10px;padding:10px 12px;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+.toast{position:fixed;right:16px;bottom:16px;background:#111b27;color:#e7ebf0;border:1px solid #213044;border-radius:10px;padding:10px 12px;box-shadow:0 8px 30px rgba(0,0,0,.5);min-width:180px}
+.chat-log{max-height:260px;overflow:auto;background:#0c1014;border:1px solid var(--outline);border-radius:10px;padding:8px;margin-bottom:10px}
+.chat-msg{font-size:13px;margin-bottom:6px;line-height:1.4}
+.chat-msg .meta{color:var(--muted);font-size:11px;margin-right:4px}
+.chat-msg.assistant{color:#9cd4ff}
+.chat-msg.user{color:#ffd499}
+.placeholder-hint{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+.placeholder-hint span{padding:2px 6px;border-radius:999px;border:1px dashed #2c3c52;font-size:11px;color:#9cb2d3}
+.tab-buttons{display:flex;gap:6px;margin-bottom:8px}
+.tab-buttons button{flex:1}
+.tab-buttons button.active{background:var(--accent);color:#fff;border-color:transparent}
+.stack{display:flex;flex-direction:column;gap:6px}
+.section{margin-bottom:16px;border-top:1px solid rgba(255,255,255,0.04);padding-top:12px}
+.section:first-child{border-top:none;padding-top:0}
 table{width:100%;border-collapse:collapse}
-th,td{padding:6px 8px;border-bottom:1px solid #1e242c;font-size:14px;vertical-align:top}
+th,td{padding:6px 8px;border-bottom:1px solid var(--outline);font-size:13px;vertical-align:top}
 #globalChat{max-height:40vh;overflow:auto}
+.badge{display:inline-flex;gap:4px;align-items:center;font-size:11px;border:1px solid #243143;border-radius:999px;padding:2px 6px;color:#9cb2d3}
+form{margin:0}
 </style>
 </head><body>
 <header>
@@ -1029,33 +1051,38 @@ th,td{padding:6px 8px;border-bottom:1px solid #1e242c;font-size:14px;vertical-al
       <div class="row"><label>Page size</label><input id="pageSize" type="number" value="100"/></div>
     </div>
     <div class="card">
-      <div class="row"><button class="ghost" id="btnNewEntry">+ Entry</button></div>
+      <div class="between"><button class="ghost" id="btnNewEntry">+ Entry</button><span class="small" id="entryStats"></span></div>
       <div id="entries" class="list"></div>
     </div>
     <div class="card">
-      <div class="row"><b>Global Chat</b><span class="small">(mới nhất)</span></div>
+      <div class="between"><b>Global Chat</b><span class="small">(mới nhất)</span></div>
       <div id="globalChat"></div>
     </div>
   </aside>
   <main>
-    <div id="detail" class="card"><div class="small">Select an entry…</div></div>
-    <div id="people" class="card"><div class="small">Select an entry to see people.</div></div>
+    <div id="detail" class="card entry-card"><div class="small">Chọn một entry để bắt đầu.</div></div>
+    <div id="people" class="card"><div class="small">Chọn entry để xem dân/cán bộ.</div></div>
+    <div id="personDetail" class="card"><div class="small">Chọn một nhân vật để chỉnh sửa & thử chat.</div></div>
   </main>
 </div>
 <div id="toast" class="toast" style="display:none;"></div>
 <script>
-let current=null, currentPeopleType='residents', total=0;
+const PLACEHOLDER_DEFAULTS={name:'Nguyễn Văn A',age:25,gender:'nam',job:'nông dân',social:'dân đinh'};
+let current=null,currentPeopleType='residents',selectedPersonId=null,total=0;
 
 function toast(msg){
-  const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block';
-  setTimeout(()=>t.style.display='none', 3000);
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.style.display='block';
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer=setTimeout(()=>t.style.display='none',3200);
 }
 function escapeHtml(s){return (s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')}
 function escapeAttr(s){return escapeHtml(s).replaceAll('"','&quot;')}
-async function api(path, method='GET', body=null){
-  const opt={method,headers:{'Accept':'application/json'}}; if(body){opt.headers['Content-Type']='application/json'; opt.body=JSON.stringify(body)}
-  const r=await fetch(path,opt); let j=null; try{j=await r.json()}catch(e){}
-  if(!r.ok) throw new Error((j&&j.error)||r.statusText); return j;
+async function api(path,method='GET',body=null){
+  const opt={method,headers:{Accept:'application/json'}};
+  if(body){opt.headers['Content-Type']='application/json';opt.body=JSON.stringify(body)}
+  const r=await fetch(path,opt);let j=null;try{j=await r.json()}catch(e){}
+  if(!r.ok) throw new Error((j&&j.error)||r.statusText);return j||{};
 }
 async function loadEntries(){
   const cl=document.getElementById('filterClass').value;
@@ -1063,10 +1090,14 @@ async function loadEntries(){
   const q=document.getElementById('searchBox').value.trim();
   const page=parseInt(document.getElementById('page').value||1);
   const sz=parseInt(document.getElementById('pageSize').value||100);
-  const params=new URLSearchParams(); if(cl)params.set('class',cl); if(st)params.set('subtype',st); if(q)params.set('q',q);
-  params.set('limit', sz); params.set('offset', (page-1)*sz);
-  const j=await api('/api/entries?'+params.toString()); total=j.total||0;
-  buildSubtypeOptions(j.items||[]); renderEntries(j.items||[]);
+  const params=new URLSearchParams();
+  if(cl)params.set('class',cl); if(st)params.set('subtype',st); if(q)params.set('q',q);
+  params.set('limit',sz); params.set('offset',(page-1)*sz);
+  const j=await api('/api/entries?'+params.toString());
+  total=j.total||0;
+  document.getElementById('entryStats').textContent=`${total} bản ghi`;
+  buildSubtypeOptions(j.items||[]);
+  renderEntries(j.items||[]);
 }
 function buildSubtypeOptions(items){
   const s=document.getElementById('filterSubtype'); const cur=s.value; const set=new Set();
@@ -1076,145 +1107,420 @@ function buildSubtypeOptions(items){
 }
 function renderEntries(items){
   const el=document.getElementById('entries');
-  el.innerHTML = (items||[]).map(e=>`
-    <div class="item" onclick="openEntry(${e.id})">
-      <div><b>${escapeHtml(e.name||'')}</b> <span class="pill">${escapeHtml(e.class||'-')}</span> <span class="pill">${escapeHtml(e.subtype||'-')}</span></div>
-      <div class="small">${escapeHtml(e.region||'')}</div>
-      <div class="small">${escapeHtml(e.description||'')}</div>
-    </div>`).join('');
+  if(!items.length){el.innerHTML='<div class="small">Không có dữ liệu.</div>';return;}
+  el.innerHTML=items.map(e=>{
+    const active=current&&current.id===e.id?'active':'';
+    const div=`<div class="item ${active}" data-id="${escapeAttr(String(e.id))}">
+      <div><b>${escapeHtml(e.name||'')}</b></div>
+      <div class="small">${escapeHtml(e.region||'')} · ${escapeHtml(e.class||'')} / ${escapeHtml(e.subtype||'')}</div>
+      <div class="small">#${e.id}</div>
+    </div>`;
+    return div;
+  }).join('');
+  el.querySelectorAll('.item').forEach(node=>{
+    node.addEventListener('click',()=>openEntry(Number(node.getAttribute('data-id'))));
+  });
 }
 async function openEntry(id){
   current=await api('/api/entries/'+id);
-  currentPeopleType=(current.class==='khu')?'residents':'staff';
-  // detail
-  document.getElementById('detail').innerHTML = `
-    <div class="row grid">
-      <div><label>Region</label><input id="f_region" value="${escapeAttr(current.region||'')}"></div>
-      <div><label>Name</label><input id="f_name" value="${escapeAttr(current.name||'')}"></div>
-      <div><label>Class</label>
-        <select id="f_class"><option value="khu" ${current.class==='khu'?'selected':''}>khu</option>
-        <option value="cong_trinh" ${current.class==='cong_trinh'?'selected':''}>cong_trinh</option></select>
-      </div>
-      <div><label>Subtype</label><input id="f_subtype" value="${escapeAttr(current.subtype||'')}"></div>
-    </div>
-    <div class="row"><label>Description</label><textarea id="f_desc" rows="2">${escapeHtml(current.description||'')}</textarea></div>
-    <div class="row">
-      ${ current.class==='khu'
-          ? `<label>population_count</label><input id="f_pop" type="number" value="${Number(current.population_count||0)}">`
-          : `<label>staff_count</label><input id="f_staff" type="number" value="${Number(current.staff_count||0)}">`
-      }
-    </div>
-    <div class="row"><button onclick="saveEntry()">💾 Save</button> <button class="ghost" onclick="createEntry()">+ New</button></div>
-  `;
+  currentPeopleType=current.class==='khu'?'residents':'staff';
+  const arr=current[currentPeopleType]||[];
+  selectedPersonId=arr.length?arr[0].resident_id:null;
+  renderEntryDetail();
   renderPeople();
+  renderPersonDetail();
+  loadEntries().catch(()=>{});
+}
+function renderEntryDetail(){
+  const container=document.getElementById('detail');
+  if(!current){container.innerHTML='<div class="small">Chọn một entry để bắt đầu.</div>';return;}
+  const e=current;
+  container.innerHTML=`
+    <form id="entryForm" class="stack">
+      <div class="between"><div><b>${escapeHtml(e.name||'')}</b></div><span class="badge">ID #${e.id}</span></div>
+      <div class="row"><label>Tên</label><input id="f_name" value="${escapeAttr(e.name||'')}" required/></div>
+      <div class="row"><label>Khu vực</label><input id="f_region" value="${escapeAttr(e.region||'')}"/></div>
+      <div class="row"><label>Class</label><select id="f_class">
+        <option value="khu" ${e.class==='khu'?'selected':''}>khu</option>
+        <option value="cong_trinh" ${e.class==='cong_trinh'?'selected':''}>cong_trinh</option>
+      </select></div>
+      <div class="row"><label>Subtype</label><input id="f_subtype" value="${escapeAttr(e.subtype||'')}"/></div>
+      <div class="row"><label>Mô tả</label><textarea id="f_desc">${escapeHtml(e.description||'')}</textarea></div>
+      <div class="row" id="entryCountRow"></div>
+      <div class="between">
+        <div class="small">Lưu ý: bấm "Lưu" sẽ thông báo cho người khác qua SSE.</div>
+        <div class="stack" style="gap:4px;align-items:flex-end">
+          <button type="submit">Lưu Entry</button>
+        </div>
+      </div>
+    </form>
+  `;
+  const row=document.getElementById('entryCountRow');
+  if(e.class==='khu'){
+    row.innerHTML=`<label>Dân số</label><input id="f_pop" type="number" min="0" value="${e.population_count||0}"/>`;
+  }else{
+    row.innerHTML=`<label>Nhân sự</label><input id="f_staff" type="number" min="0" value="${e.staff_count||0}"/>`;
+  }
+  document.getElementById('entryForm').addEventListener('submit',saveEntry);
+}
+function peopleArrays(){
+  if(!current) return [];
+  const arr=[];
+  if(current.residents&&current.residents.length) arr.push(['residents','Dân cư',current.residents]);
+  if(current.staff&&current.staff.length) arr.push(['staff','Nhân sự',current.staff]);
+  if(!arr.length){
+    if(current.class==='khu') arr.push(['residents','Dân cư',current.residents||[]]);
+    else arr.push(['staff','Nhân sự',current.staff||[]]);
+  }
+  return arr;
 }
 function renderPeople(){
-  const p=document.getElementById('people'); if(!current){p.innerHTML='<div class="small">No entry.</div>'; return;}
-  const rows=(current[currentPeopleType]||[]).map(px=>{
-    const prof=px.profile||{}; const rid=px.resident_id||'';
-    return `<tr>
-      <td>${escapeHtml(rid)}</td>
-      <td>${escapeHtml(prof.name||px.ho_ten||'')}</td>
-      <td>${escapeHtml(String(prof.age||px.tuoi||''))}</td>
-      <td>${escapeHtml(prof.gender||px.gioi_tinh||'')}</td>
-      <td>${escapeHtml(prof.job||px.nghe_nghiep||'')}</td>
-      <td>${escapeHtml(prof.social||px.than_phan_xa_hoi||'')}</td>
-      <td>
-        <button class="ghost" onclick="openProfile('${rid}')">Profile</button>
-        <button class="ghost" onclick="openDialogue('${rid}')">Dialogue</button>
-        <button class="ghost" onclick="openBehaviors('${rid}')">Behaviors</button>
-        <button onclick="openChat('${rid}')">Chat</button>
-        <button class="danger" onclick="confirmDelete('${rid}')">Del</button>
-      </td></tr>`;
-  }).join('');
-  p.innerHTML = `
-    <div class="row"><b>People (${currentPeopleType})</b><button class="ghost" onclick="addPerson()">+ Add</button></div>
-    <table><thead><tr><th>ID</th><th>Tên</th><th>Tuổi</th><th>Giới</th><th>Nghề</th><th>Thân phận</th><th></th></tr></thead>
-    <tbody>${rows}</tbody></table>
+  const wrap=document.getElementById('people');
+  if(!current){wrap.innerHTML='<div class="small">Chọn entry trước.</div>';return;}
+  const groups=peopleArrays();
+  const arr=current[currentPeopleType]||[];
+  const headerTabs=groups.length>1?`<div class="tab-buttons">${groups.map(([key,label])=>`<button type="button" class="ghost ${key===currentPeopleType?'active':''}" data-kind="${key}">${label}</button>`).join('')}</div>`:'';
+  const rows=arr.map(p=>{
+    const prof=Object.assign({},PLACEHOLDER_DEFAULTS,p.profile||{});
+    const active=p.resident_id===selectedPersonId?'active':'';
+    return `<div class="item ${active}" data-rid="${escapeAttr(p.resident_id||'')}">
+      <div class="between"><b>${escapeHtml(prof.name||p.resident_id||'')}</b><span class="pill">${escapeHtml(p.resident_id||'')}</span></div>
+      <div class="small">${escapeHtml(prof.age||'?')} tuổi · ${escapeHtml(prof.gender||'?')} · ${escapeHtml(prof.job||'')}</div>
+      <div class="small">${escapeHtml(prof.social||'')}</div>
+    </div>`;
+  }).join('') || '<div class="small">Chưa có nhân vật. Thêm mới để bắt đầu.</div>';
+  wrap.innerHTML=`
+    <div class="between">
+      <div><b>${groups.find(([key])=>key===currentPeopleType)?.[1]||'Nhân vật'}</b></div>
+      <div class="stack" style="gap:4px;align-items:flex-end">
+        <button type="button" class="ghost slim" id="btnAddPerson">+ Thêm</button>
+      </div>
+    </div>
+    ${headerTabs}
+    <div class="list" id="peopleList">${rows}</div>
   `;
+  wrap.querySelector('#btnAddPerson').addEventListener('click',addPerson);
+  wrap.querySelectorAll('.tab-buttons button').forEach(btn=>{
+    btn.addEventListener('click',()=>switchPeople(btn.getAttribute('data-kind')));
+  });
+  wrap.querySelectorAll('#peopleList .item').forEach(node=>{
+    node.addEventListener('click',()=>selectPerson(node.getAttribute('data-rid')));
+  });
 }
-async function saveEntry(){
-  const payload={region:document.getElementById('f_region').value,
-    name:document.getElementById('f_name').value,class:document.getElementById('f_class').value,
-    subtype:document.getElementById('f_subtype').value,description:document.getElementById('f_desc').value};
+function switchPeople(kind){
+  currentPeopleType=kind; const arr=current[kind]||[];
+  selectedPersonId=arr.length?arr[0].resident_id:null;
+  renderPeople();
+  renderPersonDetail();
+}
+async function saveEntry(ev){
+  ev.preventDefault();
+  const payload={
+    region:document.getElementById('f_region').value,
+    name:document.getElementById('f_name').value,
+    class:document.getElementById('f_class').value,
+    subtype:document.getElementById('f_subtype').value,
+    description:document.getElementById('f_desc').value
+  };
   if(payload.class==='khu') payload.population_count=Number(document.getElementById('f_pop').value||0);
   else payload.staff_count=Number(document.getElementById('f_staff').value||0);
-  await api('/api/entries/'+current.id,'PUT',payload); toast('Saved'); loadEntries();
+  await api('/api/entries/'+current.id,'PUT',payload);
+  toast('Đã lưu entry');
+  await refreshCurrentEntry();
 }
 async function createEntry(){
-  const payload={class:'khu',subtype:'khu_dan_cu',name:'New Entry',region:'',description:''};
-  await api('/api/entries','POST',payload); loadEntries();
+  const payload={class:'khu',subtype:'khu_dan_cu',name:'Entry mới',region:'',description:''};
+  const res=await api('/api/entries','POST',payload);
+  toast('Đã tạo entry mới');
+  await loadEntries();
+  await openEntry(res.id);
 }
 async function addPerson(){
-  const prof=prompt('Tên|Tuổi|Giới|Nghề|Thân phận', 'Nguyễn Văn A|25|nam|nông dân|dân đinh')||'';
-  const [name,age,gender,job,social]=(prof.split('|').map(s=>s.trim()));
-  const payload={ profile:{name,age:Number(age||0),gender,job,social} };
+  if(!current) return;
+  const payload={profile:Object.assign({},PLACEHOLDER_DEFAULTS)};
   const url=current.class==='khu'?`/api/entries/${current.id}/residents`:`/api/entries/${current.id}/staff`;
-  await api(url,'POST',payload); openEntry(current.id);
+  const res=await api(url,'POST',payload);
+  toast('Đã thêm nhân vật mới');
+  selectedPersonId=res.resident_id;
+  await refreshCurrentEntry();
 }
-async function openProfile(rid){
-  const arr=current[currentPeopleType]||[]; const p=arr.find(x=>x.resident_id===rid); if(!p) return;
-  const prof=Object.assign({name:'',age:0,gender:'',job:'',social:''}, p.profile||{});
-  const newer=prompt('Profile: Tên|Tuổi|Giới|Nghề|Thân phận', `${prof.name}|${prof.age}|${prof.gender}|${prof.job}|${prof.social}`);
-  if(newer==null) return;
-  const [name,age,gender,job,social]=(newer.split('|').map(s=>s.trim()));
-  const payload={ profile:{name,age:Number(age||0),gender,job,social} };
-  const url=current.class==='khu'?`/api/entries/${current.id}/residents/${rid}`:`/api/entries/${current.id}/staff/${rid}`;
-  await api(url,'PUT',payload); openEntry(current.id);
+async function selectPerson(rid){
+  selectedPersonId=rid;
+  renderPeople();
+  await refreshPersonDetail(true);
 }
-async function openDialogue(rid){
-  const arr=current[currentPeopleType]||[]; const p=arr.find(x=>x.resident_id===rid)||{};
-  const dlg=p.dialogue||{ambient:[],interact:[],system_notes:''};
-  const amb=prompt('Ambient (mỗi dòng 1 câu, placeholder {{name}}...)', (dlg.ambient||[]).join('\n'));
-  if(amb==null) return;
-  const it=prompt('Interact (mỗi dòng 1 câu, placeholder {{name}}...)', (dlg.interact||[]).join('\n')); if(it==null) return;
-  const note=prompt('Notes', dlg.system_notes||''); if(note==null) return;
-  const payload={ dialogue:{ ambient:(amb||'').split('\n').map(x=>x.trim()).filter(Boolean),
-                            interact:(it||'').split('\n').map(x=>x.trim()).filter(Boolean),
-                            system_notes:note }};
-  const url=current.class==='khu'?`/api/entries/${current.id}/residents/${rid}`:`/api/entries/${current.id}/staff/${rid}`;
-  await api(url,'PUT',payload); toast('Dialogue saved'); openEntry(current.id);
+async function refreshCurrentEntry(){
+  if(!current) return;
+  const id=current.id;
+  current=await api('/api/entries/'+id);
+  if(currentPeopleType==='residents' && !current.residents) current.residents=[];
+  if(currentPeopleType==='staff' && !current.staff) current.staff=[];
+  const arr=current[currentPeopleType]||[];
+  if(selectedPersonId && !arr.some(p=>p.resident_id===selectedPersonId)){
+    selectedPersonId=arr.length?arr[0].resident_id:null;
+  }
+  renderEntryDetail();
+  renderPeople();
+  await refreshPersonDetail(true);
 }
-async function openBehaviors(rid){
-  const json=prompt('Paste behaviors JSON (array of objects)', '[]'); if(json==null) return;
-  let list=[]; try{ list=JSON.parse(json) }catch(e){ return alert('Invalid JSON')}
-  const payload={behaviors:list}; const url=current.class==='khu'?`/api/entries/${current.id}/residents/${rid}`:`/api/entries/${current.id}/staff/${rid}`;
-  await api(url,'PUT',payload); toast('Behaviors saved'); openEntry(current.id);
+async function refreshPersonDetail(fetchChat){
+  renderPersonDetail();
+  if(fetchChat && current && selectedPersonId){
+    try{
+      const log=await api(`/api/chat/npc/${current.id}/${selectedPersonId}`);
+      const arr=current[currentPeopleType]||[];
+      const p=arr.find(x=>x.resident_id===selectedPersonId);
+      if(p) p.chat_log=log.log||[];
+      renderChat(log.log||[]);
+    }catch(e){renderChat([]);}
+  }
 }
-async function openChat(rid){
-  const say=prompt('Bạn nói:'); if(say==null||!say.trim()) return;
-  const j=await api('/api/ai/chat','POST',{entry_id:current.id,resident_id:rid,message:say});
-  alert('NPC: '+j.reply);
+function renderPersonDetail(){
+  const wrap=document.getElementById('personDetail');
+  if(!current){wrap.innerHTML='<div class="small">Chọn entry trước.</div>';return;}
+  const arr=current[currentPeopleType]||[];
+  const person=arr.find(x=>x.resident_id===selectedPersonId);
+  if(!person){wrap.innerHTML='<div class="small">Chọn hoặc tạo nhân vật mới.</div>';renderChat([]);return;}
+  const prof=Object.assign({},PLACEHOLDER_DEFAULTS,person.profile||{});
+  const persona=Object.assign({vai_tro_loi_thoai:'',dong_co:'',thai_do_phap_luat:'',dao_duc:'',prompt_seed:[]},person.persona||{});
+  const speech=Object.assign({dai_tu_xung_ho:'ta',phong_cach_cau:'mộc mạc'},persona.ngon_ngu_giao_tiep||{});
+  const dlg=Object.assign({ambient:[],interact:[],system_notes:''},person.dialogue||{});
+  wrap.innerHTML=`
+    <div class="between"><div><b>${escapeHtml(prof.name||person.resident_id||'Nhân vật')}</b></div><span class="pill">${escapeHtml(person.resident_id||'')}</span></div>
+    <div class="placeholder-hint">
+      <span>{{name}}</span><span>{{age}}</span><span>{{gender}}</span><span>{{job}}</span><span>{{social}}</span>
+    </div>
+    <form id="personForm" class="stack">
+      <div class="section">
+        <div class="small">Thông tin & Persona chỉnh cùng lúc.</div>
+        <div class="row"><label>Tên</label><input id="pf_name" value="${escapeAttr(prof.name||'')}"/></div>
+        <div class="row"><label>Tuổi</label><input id="pf_age" type="number" value="${prof.age||''}"/></div>
+        <div class="row"><label>Giới tính</label><input id="pf_gender" value="${escapeAttr(prof.gender||'')}"/></div>
+        <div class="row"><label>Nghề nghiệp</label><input id="pf_job" value="${escapeAttr(prof.job||'')}"/></div>
+        <div class="row"><label>Thân phận</label><input id="pf_social" value="${escapeAttr(prof.social||'')}"/></div>
+      </div>
+      <div class="section">
+        <div class="row"><label>Vai trò thoại</label><input id="ps_role" value="${escapeAttr(persona.vai_tro_loi_thoai||'')}" placeholder="ví dụ: chưởng quầy"/></div>
+        <div class="row"><label>Động cơ</label><input id="ps_motive" value="${escapeAttr(persona.dong_co||'')}"/></div>
+        <div class="row"><label>Thái độ luật</label><input id="ps_law" value="${escapeAttr(persona.thai_do_phap_luat||'')}"/></div>
+        <div class="row"><label>Đạo đức</label><input id="ps_moral" value="${escapeAttr(persona.dao_duc||'')}"/></div>
+        <div class="row"><label>Xưng hô</label><input id="ps_pron" value="${escapeAttr(speech.dai_tu_xung_ho||'')}"/></div>
+        <div class="row"><label>Phong cách</label><input id="ps_style" value="${escapeAttr(speech.phong_cach_cau||'')}"/></div>
+        <div class="row"><label>Seed</label><textarea id="ps_seed" placeholder="mỗi dòng một ý">${escapeHtml((persona.prompt_seed||[]).join('\n'))}</textarea></div>
+      </div>
+      <div class="between">
+        <div class="small">Giữ văn phong nhân vật, dùng placeholder khi nhắc tên.</div>
+        <div class="stack" style="gap:4px;align-items:flex-end">
+          <button type="submit">Lưu persona/profile</button>
+        </div>
+      </div>
+    </form>
+    <form id="dialogueForm" class="stack section">
+      <div class="row"><label>Ambient</label><textarea id="dg_ambient" placeholder="mỗi dòng 1 câu">${escapeHtml((dlg.ambient||[]).join('\n'))}</textarea></div>
+      <div class="row"><label>Interact</label><textarea id="dg_interact" placeholder="mỗi dòng 1 câu">${escapeHtml((dlg.interact||[]).join('\n'))}</textarea></div>
+      <div class="row"><label>Ghi chú</label><textarea id="dg_notes" placeholder="system notes">${escapeHtml(dlg.system_notes||'')}</textarea></div>
+      <div class="between">
+        <div class="small">Placeholder sẽ tự được áp khi lưu.</div>
+        <div class="stack" style="gap:4px;align-items:flex-end">
+          <button type="submit">Lưu thoại</button>
+        </div>
+      </div>
+    </form>
+    <form id="behaviorForm" class="stack section">
+      <div class="row"><label>Behaviors JSON</label><textarea id="bh_json" placeholder="[]">${escapeHtml(JSON.stringify(person.behaviors||[],null,2))}</textarea></div>
+      <div class="between">
+        <div class="small">Nhập JSON hợp lệ (array).</div>
+        <div class="stack" style="gap:4px;align-items:flex-end">
+          <button type="submit">Lưu behaviors</button>
+        </div>
+      </div>
+    </form>
+    <div class="section" id="chatSection">
+      <div class="between"><b>Chat thử</b><button type="button" class="ghost slim" id="btnResetChat">Xoá lịch sử</button></div>
+      <div id="chatLog" class="chat-log"></div>
+      <textarea id="chatInput" placeholder="Nhập câu hỏi..." style="min-height:64px"></textarea>
+      <div class="between">
+        <div class="small">NPC sẽ trả lời đúng tính cách, không giọng trợ lý.</div>
+        <div class="stack" style="gap:4px;align-items:flex-end">
+          <button type="button" id="btnSendChat">Gửi & hỏi</button>
+        </div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="between"><b>Preview placeholder</b><button type="button" class="ghost slim" id="btnPreviewText">Render</button></div>
+      <textarea id="previewInput" placeholder="Ví dụ: {{name}} năm nay {{age}} tuổi."></textarea>
+      <div id="previewOutput" class="small" style="min-height:24px"></div>
+    </div>
+    <div class="section">
+      <button type="button" class="danger slim" id="btnDeletePerson">Xoá nhân vật</button>
+    </div>
+  `;
+  renderChat(person.chat_log||[]);
+  document.getElementById('personForm').addEventListener('submit',savePerson);
+  document.getElementById('dialogueForm').addEventListener('submit',saveDialogue);
+  document.getElementById('behaviorForm').addEventListener('submit',saveBehaviors);
+  document.getElementById('btnSendChat').addEventListener('click',sendChatMessage);
+  document.getElementById('btnResetChat').addEventListener('click',resetChatLog);
+  document.getElementById('btnDeletePerson').addEventListener('click',deletePersonCascade);
+  document.getElementById('btnPreviewText').addEventListener('click',previewPlaceholderText);
 }
-async function confirmDelete(rid){
-  if(!confirm('Xóa người này?')) return;
+function renderChat(log){
+  const wrap=document.getElementById('chatLog');
+  if(!wrap){return;}
+  if(!log||!log.length){wrap.innerHTML='<div class="small">Chưa có đoạn chat.</div>';return;}
+  wrap.innerHTML=log.map(item=>{
+    const role=item.role||'assistant';
+    const cls=role==='assistant'?'assistant':'user';
+    return `<div class="chat-msg ${cls}"><span class="meta">${escapeHtml(role)} · ${escapeHtml(item.ts||'')}</span>${escapeHtml(item.content||'')}</div>`;
+  }).join('');
+  wrap.scrollTop=wrap.scrollHeight;
+}
+async function savePerson(ev){
+  ev.preventDefault();
+  if(!current||!selectedPersonId) return;
+  const payload={
+    profile:{
+      name:document.getElementById('pf_name').value,
+      age:Number(document.getElementById('pf_age').value||0),
+      gender:document.getElementById('pf_gender').value,
+      job:document.getElementById('pf_job').value,
+      social:document.getElementById('pf_social').value
+    },
+    persona:{
+      vai_tro_loi_thoai:document.getElementById('ps_role').value,
+      dong_co:document.getElementById('ps_motive').value,
+      thai_do_phap_luat:document.getElementById('ps_law').value,
+      dao_duc:document.getElementById('ps_moral').value,
+      ngon_ngu_giao_tiep:{
+        dai_tu_xung_ho:document.getElementById('ps_pron').value,
+        phong_cach_cau:document.getElementById('ps_style').value
+      },
+      prompt_seed:document.getElementById('ps_seed').value.split('\n').map(s=>s.trim()).filter(Boolean)
+    }
+  };
+  const url=currentPeopleType==='residents'?`/api/entries/${current.id}/residents/${selectedPersonId}`:`/api/entries/${current.id}/staff/${selectedPersonId}`;
+  await api(url,'PUT',payload);
+  toast('Đã lưu profile/persona');
+  await refreshCurrentEntry();
+}
+async function saveDialogue(ev){
+  ev.preventDefault();
+  if(!current||!selectedPersonId) return;
+  const payload={dialogue:{
+    ambient:document.getElementById('dg_ambient').value.split('\n').map(s=>s.trim()).filter(Boolean),
+    interact:document.getElementById('dg_interact').value.split('\n').map(s=>s.trim()).filter(Boolean),
+    system_notes:document.getElementById('dg_notes').value
+  }};
+  const url=currentPeopleType==='residents'?`/api/entries/${current.id}/residents/${selectedPersonId}`:`/api/entries/${current.id}/staff/${selectedPersonId}`;
+  await api(url,'PUT',payload);
+  toast('Đã lưu thoại');
+  await refreshCurrentEntry();
+}
+async function saveBehaviors(ev){
+  ev.preventDefault();
+  if(!current||!selectedPersonId) return;
+  let parsed=[];
+  const txt=document.getElementById('bh_json').value.trim();
+  if(txt){
+    try{parsed=JSON.parse(txt);}catch(e){alert('JSON không hợp lệ');return;}
+    if(!Array.isArray(parsed)){alert('Behaviors phải là mảng');return;}
+  }
+  const payload={behaviors:parsed};
+  const url=currentPeopleType==='residents'?`/api/entries/${current.id}/residents/${selectedPersonId}`:`/api/entries/${current.id}/staff/${selectedPersonId}`;
+  await api(url,'PUT',payload);
+  toast('Đã lưu behaviors');
+  await refreshCurrentEntry();
+}
+async function sendChatMessage(ev){
+  ev.preventDefault();
+  if(!current||!selectedPersonId) return;
+  const input=document.getElementById('chatInput');
+  const msg=(input.value||'').trim();
+  if(!msg){toast('Nhập nội dung trước đã');return;}
+  input.value='';
+  try{
+    const res=await api('/api/ai/chat','POST',{entry_id:current.id,resident_id:selectedPersonId,message:msg});
+    toast('NPC đã trả lời');
+    const arr=current[currentPeopleType]||[];
+    const person=arr.find(x=>x.resident_id===selectedPersonId);
+    if(person){
+      person.chat_log=person.chat_log||[];
+      const now=new Date().toISOString();
+      person.chat_log.push({role:'user',content:msg,ts:now});
+      person.chat_log.push({role:'assistant',content:res.reply,ts:now});
+      renderChat(person.chat_log);
+    }else{
+      await refreshPersonDetail(true);
+    }
+  }catch(e){toast('Chat lỗi: '+e.message);}
+}
+async function resetChatLog(ev){
+  ev.preventDefault();
+  if(!current||!selectedPersonId) return;
+  if(!confirm('Xoá toàn bộ chat với NPC này?')) return;
+  await api(`/api/chat/npc/${current.id}/${selectedPersonId}`,'DELETE');
+  toast('Đã xoá lịch sử chat');
+  await refreshPersonDetail(true);
+}
+async function deletePersonCascade(){
+  if(!current||!selectedPersonId) return;
+  if(!confirm('Xoá nhân vật này và gỡ liên kết?')) return;
   const kind=currentPeopleType;
-  const imp=await api(`/api/entries/${current.id}/${kind}/${rid}/impact`);
-  if(!confirm(`Incoming=${imp.counts.incoming}, spouse=${imp.counts.spouse}, parents=${imp.counts.parents}, children=${imp.counts.children}, siblings=${imp.counts.siblings}. Tiếp tục?`)) return;
-  await api(`/api/entries/${current.id}/${kind}/${rid}/cascade`,'DELETE'); openEntry(current.id);
+  const impact=await api(`/api/entries/${current.id}/${kind}/${selectedPersonId}/impact`);
+  if(!confirm(`Ảnh hưởng: incoming=${impact.counts.incoming}, spouse=${impact.counts.spouse}, parents=${impact.counts.parents}, children=${impact.counts.children}, siblings=${impact.counts.siblings}. Tiếp tục?`)) return;
+  await api(`/api/entries/${current.id}/${kind}/${selectedPersonId}/cascade`,'DELETE');
+  toast('Đã xoá nhân vật');
+  selectedPersonId=null;
+  await refreshCurrentEntry();
 }
-async function scanFamilies(){ const j=await api('/api/tools/scan_families','POST',{}); toast('Scan done: '+(j.updated_fields||0)); if(current) openEntry(current.id); else loadEntries(); }
-async function normalizeAll(){ const j=await api('/api/tools/normalize_all','POST',{}); toast('Normalized: '+(j.updated_records||0)); if(current) openEntry(current.id); else loadEntries(); }
+async function previewPlaceholderText(ev){
+  ev.preventDefault();
+  if(!current||!selectedPersonId) return;
+  const text=document.getElementById('previewInput').value;
+  const res=await api('/api/helpers/render','POST',{entry_id:current.id,resident_id:selectedPersonId,text});
+  document.getElementById('previewOutput').textContent=res.rendered||'';
+}
 async function loadGlobalChat(){
   const j=await api('/api/chat/recent?limit=60'); const el=document.getElementById('globalChat');
   el.innerHTML=(j.items||[]).map(x=>`<div class="small"><b>${escapeHtml(x.name||x.resident_id||'')}</b> <i>${escapeHtml(x.role)}</i>: ${escapeHtml(x.content||'')}</div>`).join('');
 }
 document.getElementById('btnReload').addEventListener('click', loadEntries);
-document.getElementById('btnScan').addEventListener('click', scanFamilies);
-document.getElementById('btnNormalize').addEventListener('click', normalizeAll);
+document.getElementById('btnScan').addEventListener('click', async()=>{const j=await api('/api/tools/scan_families','POST',{});toast('Scan: '+(j.updated_fields||0)+' cập nhật');await refreshCurrentEntry();});
+document.getElementById('btnNormalize').addEventListener('click', async()=>{const j=await api('/api/tools/normalize_all','POST',{});toast('Normalize: '+(j.updated_records||0)+' người');await refreshCurrentEntry();});
 document.getElementById('btnNewEntry').addEventListener('click', createEntry);
 document.getElementById('filterClass').addEventListener('change', loadEntries);
 document.getElementById('filterSubtype').addEventListener('change', loadEntries);
 document.getElementById('searchBox').addEventListener('input', e=>{ clearTimeout(window.__q); window.__q=setTimeout(loadEntries,250); });
 document.getElementById('page').addEventListener('change', loadEntries);
 document.getElementById('pageSize').addEventListener('change', loadEntries);
-loadEntries(); loadGlobalChat();
+loadEntries();
+loadGlobalChat();
 setInterval(loadGlobalChat, 5000);
-// SSE
 try{
   const es=new EventSource('/events');
-  es.onmessage=(ev)=>{ try{const j=JSON.parse(ev.data); if(j.type){ toast(j.type); if(j.type.startsWith('entry_')||j.type.startsWith('person_')) loadEntries(); if(j.type==='chat') loadGlobalChat(); }}catch(e){} };
-}catch(e){}
+  es.onmessage=(ev)=>{
+    try{
+      const j=JSON.parse(ev.data);
+      if(!j.type) return;
+      let msg=j.type;
+      if(j.type==='entry_updated') msg=`Entry #${j.id} vừa lưu bởi ${j.by||'ai đó'}`;
+      if(j.type==='entry_created') msg=`Entry mới #${j.id}`;
+      if(j.type==='entry_deleted') msg=`Entry #${j.id} vừa bị xoá`;
+      if(j.type==='person_updated') msg=`NPC ${j.rid} được cập nhật`;
+      if(j.type==='person_added') msg=`NPC mới ${j.rid}`;
+      if(j.type==='person_deleted') msg=`NPC ${j.rid} bị xoá`;
+      if(j.type==='chat') msg=`NPC ${j.rid} có chat mới`;
+      toast(msg);
+      if(j.type.startsWith('entry_')) loadEntries().catch(()=>{});
+      if(current){
+        if(j.type.startsWith('entry_') && j.id===current.id) refreshCurrentEntry().catch(()=>{});
+        if(j.type.startsWith('person_') && j.entry===current.id) refreshCurrentEntry().catch(()=>{});
+        if(j.type==='chat' && j.entry===current.id && j.rid===selectedPersonId) refreshPersonDetail(true).catch(()=>{});
+      }
+      if(j.type==='chat') loadGlobalChat();
+    }catch(e){}
+  };
+}catch(e){console.warn('SSE disabled',e);}
 </script>
 </body></html>
 """
